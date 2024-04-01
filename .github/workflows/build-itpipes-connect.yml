@@ -4,48 +4,37 @@ on:
     branches: [ "main" ]
 
 jobs:
-  echo-github-context:
-    name: Echo GitHub Context
-    runs-on: windows-latest
-    steps:
-    ############################################################################################################################
-    # Echo Echo GitHub Context
-    ############################################################################################################################
-    - name: Echo GitHub Context
-      id: echo-github-context
-      # run: echo "$GITHUB_CONTEXT"
-      # run: echo ${{ env.GITHUB_CONTEXT }}
-      run: echo "$env:GITHUB_CONTEXT"
-      env:
-        GITHUB_CONTEXT: ${{ toJson(github) }}
-
-  check-pr-labels:
-    name: Check PR Labels
-    runs-on: windows-latest
+  check-changes:
+    runs-on: ubuntu-latest
     outputs:
-        passed: ${{ steps.check-pr-labels.outputs.hasLabel }}
+      path1: ${{ steps.filter.outputs.path1 }}
+      path2: ${{ steps.filter.outputs.path2 }}
     steps:
+    - name: Checkout repo
+      uses: actions/checkout@v2
 
-    ############################################################################################################################
-    # Check PR Labels
-    ############################################################################################################################
-    - name: Get PR Labels
-      id: check-pr-labels
-      uses: actions/github-script@v5
+    - name: Path filtering
+      id: filter
+      uses: dorny/paths-filter@v2
       with:
-        script: |
-          const prNumber = context.payload.pull_request.number;
-          const { data: { labels } } = await github.rest.pulls.get({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            pull_number: prNumber
-          });
-          const hasLabel = labels.some(label => label.name === 'BuildITpipesConnect');
-          return { hasLabel };
+        filters: |
+          path1:
+            - 'connect/AssemblyInfo.txt'
+          path2:
+            - 'mobile/AssemblyInfo.txt'
 
-    ############################################################################################################################
-    # Echo Check PR Labels Result
-    ############################################################################################################################
-    - name: Echo Check Labels PR Result
-      id: echo-check-pr-labels-results
-      run: echo "${{ steps.check-pr-labels.outputs.hasLabel }}"
+  job1:
+    needs: check-changes
+    if: needs.check-changes.outputs.path1 == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Job 1
+      run: echo "Job 1 is running because path1 was modified."
+
+  job2:
+    needs: check-changes
+    if: needs.check-changes.outputs.path2 == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Job 2
+      run: echo "Job 2 is running because path2 was modified."
