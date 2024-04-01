@@ -1,8 +1,8 @@
 name: Build ITPipes Connect
 on:
   push:
-    branches: [ "staging", "master" ]
-    
+    branches: [ "main" ]
+
 jobs:
   echo-github-context:
     name: Echo GitHub Context
@@ -25,19 +25,25 @@ jobs:
     environment: ITPipesMobile
     runs-on: windows-latest
     outputs:
-        passed: ${{ steps.check-pr-labels.outputs.result }}
+        passed: ${{ steps.check-pr-labels.outputs.hasLabel }}
     steps:
 
     ############################################################################################################################
     # Check PR Labels
     ############################################################################################################################
-    - name: Check PR Labels
+    - name: Get PR Labels
       id: check-pr-labels
-      uses: shioyang/check-pr-labels-on-push-action@v1.0.9 # target v1.0.9
+      uses: actions/github-script@v5
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        labels: '["BuildITpipesConnect"]'
-      timeout-minutes: 5
+        script: |
+          const prNumber = context.payload.pull_request.number;
+          const { data: { labels } } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: prNumber
+          });
+          const hasLabel = labels.some(label => label.name === 'BuildITpipesConnect');
+          return { hasLabel };
 
     ############################################################################################################################
     # Echo Check PR Labels Result
@@ -45,3 +51,7 @@ jobs:
     - name: Echo Check Labels PR Result
       id: echo-check-pr-labels-results
       run: echo "${{ steps.check-pr-labels.outputs.result }}"
+
+    - name: Echo Check Labels PR Result
+      id: echo-check-pr-labels-results
+      run: echo "Has BuildITpipesConnect label: ${{ steps.check-pr-labels.outputs.hasLabel }}"
