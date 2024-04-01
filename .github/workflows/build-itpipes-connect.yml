@@ -1,0 +1,47 @@
+name: Build ITPipes Connect
+on:
+  push:
+    branches: [ "staging", "master" ]
+    
+jobs:
+  echo-github-context:
+    name: Echo GitHub Context
+    environment: ITPipesMobile
+    runs-on: windows-latest
+    steps:
+    ############################################################################################################################
+    # Echo Echo GitHub Context
+    ############################################################################################################################
+    - name: Echo GitHub Context
+      id: echo-github-context
+      # run: echo "$GITHUB_CONTEXT"
+      # run: echo ${{ env.GITHUB_CONTEXT }}
+      run: echo "$env:GITHUB_CONTEXT"
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+
+  check-pr-labels:
+    name: Check PR Labels
+    environment: ITPipesMobile
+    runs-on: windows-latest
+    outputs:
+        passed: ${{ steps.check-pr-labels.outputs.result }}
+    steps:
+
+    ############################################################################################################################
+    # Check PR Labels
+    ############################################################################################################################
+    - name: Check PR Labels
+      id: check-pr-labels
+      uses: shioyang/check-pr-labels-on-push-action@v1.0.9 # target v1.0.9
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        labels: '["BuildITpipesConnect"]'
+      timeout-minutes: 5
+
+    ############################################################################################################################
+    # Echo Check PR Labels Result
+    ############################################################################################################################
+    - name: Echo Check Labels PR Result
+      id: echo-check-pr-labels-results
+      run: echo "${{ steps.check-pr-labels.outputs.result }}"
