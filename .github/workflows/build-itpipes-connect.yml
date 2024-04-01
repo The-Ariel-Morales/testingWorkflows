@@ -6,7 +6,6 @@ on:
 jobs:
   echo-github-context:
     name: Echo GitHub Context
-    environment: ITPipesMobile
     runs-on: windows-latest
     steps:
     ############################################################################################################################
@@ -22,7 +21,6 @@ jobs:
 
   check-pr-labels:
     name: Check PR Labels
-    environment: ITPipesMobile
     runs-on: windows-latest
     outputs:
         passed: ${{ steps.check-pr-labels.outputs.hasLabel }}
