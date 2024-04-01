@@ -50,8 +50,4 @@ jobs:
     ############################################################################################################################
     - name: Echo Check Labels PR Result
       id: echo-check-pr-labels-results
-      run: echo "${{ steps.check-pr-labels.outputs.result }}"
-
-    - name: Echo Check Labels PR Result
-      id: echo-check-pr-labels-results
       run: echo "Has BuildITpipesConnect label: ${{ steps.check-pr-labels.outputs.hasLabel }}"
