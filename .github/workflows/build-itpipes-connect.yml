@@ -1,40 +1,592 @@
 name: Build ITPipes Connect
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "staging", "master" ]
 
 jobs:
+  ############################################################################################################################
+  # Echo the GitHub Context
+  ############################################################################################################################
+  echo-github-context:
+    name: Echo GitHub Context
+    environment: ITPipesMobile
+    runs-on: windows-latest
+    steps:
+    - name: Echo GitHub Context
+      id: echo-github-context
+      run: echo "$env:GITHUB_CONTEXT"
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+
+  ############################################################################################################################
+  # Check for path changes and apply path-filtering
+  ############################################################################################################################
   check-changes:
     runs-on: ubuntu-latest
     outputs:
-      path1: ${{ steps.filter.outputs.path1 }}
-      path2: ${{ steps.filter.outputs.path2 }}
+      connect: ${{ steps.filter.outputs.connect }}
+      mobile: ${{ steps.filter.outputs.mobile }}
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
-
     - name: Path filtering
       id: filter
       uses: dorny/paths-filter@v3
       with:
         filters: |
-          path1:
-            - 'connect/AssemblyInfo.txt'
-          path2:
-            - 'mobile/AssemblyInfo.txt'
+          connect:
+            - '\ITpipesCore\ITpipesConnect\Properties\AssemblyInfo.cs'
+          mobile:
+            - \ITpipesCore\ITpipesMobile\Properties\AssemblyInfo.cs
 
-  job1:
+  connect-job:
+    name: Build ITPipes Connect
+    environment: ITPipesMobile
     needs: check-changes
-    if: needs.check-changes.outputs.path1 == 'true'
-    runs-on: ubuntu-latest
+    if: needs.check-changes.outputs.connect == 'true'
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: [Release] # Configuration Values: Debug, Release
+        platform-target: [x64] # Platform Target Values: x86, x64
+        update-type: [AUTOUPDATE] # Update Type Values: AUTOUPDATE, NOUPDATE
+    env:
+      SOLUTION_NAME: ITpipesConnect.sln
+      # TEST_PROJECT_PATH: ITpipesMobileTests.csproj              # Replace with the path to the ITpipesMobile test project once available.
+      APP_DIR: ITpipesConnect
+      APP_NAME: ITpipesConnect.exe
     steps:
-    - name: Job 1
-      run: echo "Job 1 is running because path1 was modified."
+    ############################################################################################################################
+    # Add Repo Name to GitHub ENV
+    ############################################################################################################################
+    - name: Add Repo Name to GitHub ENV
+      id: add-repo-name-to-env
+      shell: bash
+      run: echo "REPO_NAME=${{ github.repository }}" >> $GITHUB_ENV
+    ############################################################################################################################
+    # Echo Repo Name
+    ############################################################################################################################
+    - name: Echo Repo Name
+      run : echo ${{ env.REPO_NAME }}
+    ############################################################################################################################
+    # Add Branch Name to GitHub ENV
+    ############################################################################################################################
+    - name: Add Branch Name to GitHub ENV
+      id: add-branch-name-to-env
+      shell: bash
+      run: |
+          echo "BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_ENV # extract branch name and add to env
+    ############################################################################################################################
+    # Echo Branch Name
+    ############################################################################################################################
+    - name: Echo Branch Name
+      run : echo ${{ env.BRANCH_NAME }}
+    ############################################################################################################################
+    # Add Workspace to GitHub ENV
+    ############################################################################################################################
+    - name: Add Workspace to GitHub ENV
+      id: add-workspace-to-env
+      shell: bash
+      run: echo "WORKSPACE=${{ github.workspace }}" >> $GITHUB_ENV
+    ############################################################################################################################
+    # Echo Workspace
+    ############################################################################################################################
+    - name: Echo Workspace
+      run: echo ${{ env.WORKSPACE }}
+    ############################################################################################################################
+    # Checkout Code
+    ############################################################################################################################
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    ############################################################################################################################
+    # Install .NET Framework
+    ############################################################################################################################
+    - name: Install .NET Framework
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 6.0.x # target v6.0.x
+    ############################################################################################################################
+    # Setup MSBuild
+    # https://github.com/microsoft/setup-msbuild
+    ############################################################################################################################
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@2
+    ############################################################################################################################
+    # Get Current Time
+    # TODO: figure out why day value isn't padded with 0 in timestamp below - do we need to update format?
+    ############################################################################################################################
+    - name: Get Current Time
+      uses: josStorer/get-current-time@v2
+      id: current-time # TODO: rename to get-current-time and update references accordingly
+      with:
+        # format: YYYYMMDD-HHmmss
+        format: YYYYMMDD-HH
+        utcOffset: "+00:00" # should we offset UTC to MST?
+    ############################################################################################################################
+    # Restore NuGet Packages
+    ############################################################################################################################
+    - name: Restore NuGet Packages
+      id: restore-nuget-packages
+      run: msbuild $env:SOLUTION_NAME /t:Restore /p:Configuration=$env:Configuration
+      env:
+        Configuration: ${{ matrix.configuration }}
+    ############################################################################################################################
+    # Build Application
+    # C# Compiler Options
+    # https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/code-generation
+    ############################################################################################################################
+    - name: Build Application
+      id: build-app
+      # run: msbuild $env:SOLUTION_NAME /t:Build /p:Configuration=$env:Configuration /p:PlatformTarget=$env:PlatformTarget /p:DebugSymbols=$env:DebugSymbols /p:DebugType=$env:DebugType
+      run: msbuild $env:SOLUTION_NAME /t:Build /p:Configuration=$env:Configuration /p:PlatformTarget=$env:PlatformTarget
+      env:
+        Configuration: ${{ matrix.configuration }}
+        PlatformTarget: ${{ matrix.platform-target }}
+        # DebugSymbols: false                                       # true, false
+        # DebugType: none                                           # none, full, pdbonly, portable, embedded
+    ############################################################################################################################
+    # Execute Unit Tests
+    # TODO: move to test-itpipes-mobile.yml CI workflow to be triggered on push to any branch and pr to dev/master etc.
+    ############################################################################################################################
+    # - name: Execute Unit Tests
+    #   run: dotnet test
+    ############################################################################################################################
+    # Add Relative App Path to GitHub ENV
+    ############################################################################################################################
+    - name: Add Relative App Path to GitHub ENV
+      id: add-relative-app-path-to-env
+      shell: bash
+      run: echo "RELATIVE_APP_PATH=${{ env.APP_DIR }}\bin\${{ env.Configuration }}\${{ env.APP_NAME }}" >> $GITHUB_ENV
+      env:
+        Configuration: ${{ matrix.configuration }}
+    ############################################################################################################################
+    # Echo Relative App Path
+    ############################################################################################################################
+    - name: Echo Relative App Path
+      run : echo ${{ env.RELATIVE_APP_PATH }}
+    ############################################################################################################################
+    # Add App Version Number to GitHub ENV
+    ############################################################################################################################
+    - name: Add App Version Number to GitHub ENV
+      id: add-app-version-number-to-env
+      shell: powershell
+      run: |
+          # $file_version=[System.Diagnostics.FileVersionInfo]::GetVersionInfo("${{ env.RELATIVE_APP_PATH }}").FileVersion.replace('.', '_') # replace periods with underscores in file version
+          $file_version=[System.Diagnostics.FileVersionInfo]::GetVersionInfo("${{ env.RELATIVE_APP_PATH }}").FileVersion
+          echo "APP_VERSION_NUMBER=$file_version" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+      env:
+        Configuration: ${{ matrix.configuration }}
+    ############################################################################################################################
+    # Echo App Version Number
+    ############################################################################################################################
+    - name: Echo App Version Number
+      run: echo ${{ env.APP_VERSION_NUMBER }}
+    ############################################################################################################################
+    # Add Build Artifact Filename to GitHub ENV
+    ############################################################################################################################
+    - name: Add Build Artifact Filename to GitHub ENV
+      id: add-build-artifact-filename-to-env
+      shell: bash
+      # TODO: move "ITpipesMobileInstaller" prefix to INSTALLER_PREFIX env var and update references accordingly
+      # run: echo "BUILD_ARTIFACT_FILENAME=ITpipesMobileSetup_${{ env.Configuration }}_${{ env.PlatformTarget }}_${{ env.YEAR }}${{ env.MONTH }}${{ env.DAY }}-${{ env.HOUR }}${{ env.MINUTE }}${{ env.SECOND }}.exe" >> $GITHUB_ENV
+      # run: echo "BUILD_ARTIFACT_FILENAME=ITpipesMobileSetup_${{ env.PlatformTarget }}_${{ env.BRANCH_NAME }}_${{ env.UpdateType }}_${{ env.APP_VERSION_NUMBER }}.exe" >> $GITHUB_ENV
+      # run: echo "BUILD_ARTIFACT_FILENAME=ITpipesMobileInstaller_${{ env.PlatformTarget }}_${{ env.BRANCH_NAME }}_${{ env.UpdateType }}_${{ env.APP_VERSION_NUMBER }}.exe" >> $GITHUB_ENV
+      run: echo "BUILD_ARTIFACT_FILENAME=ITpipesConnectInstaller_v${{ env.APP_VERSION_NUMBER }}_${{ env.PlatformTarget }}_${{ env.BRANCH_NAME }}_${{ env.UpdateType }}.exe" >> $GITHUB_ENV
+      env:
+        # Configuration: ${{ matrix.configuration }}
+        PlatformTarget: ${{ matrix.platform-target }}
+        UpdateType: ${{ matrix.update-type }}
+        # TIMESTAMP: ${{ env.TIMESTAMP }}
+        # TIME: "${{ steps.current-time.outputs.time }}"
+        # R_TIME: "${{ steps.current-time.outputs.readableTime }}"
+        # F_TIME: "${{ steps.current-time.outputs.formattedTime }}"
+        # YEAR: "${{ steps.current-time.outputs.year }}"
+        # MONTH: "${{ steps.current-time.outputs.month }}"
+        # DAY: "${{ steps.current-time.outputs.day }}"
+        # HOUR: "${{ steps.current-time.outputs.hour }}"
+        # MINUTE: "${{ steps.current-time.outputs.minute }}"
+        # SECOND: "${{ steps.current-time.outputs.second }}"
+        # MILLISECOND: "${{ steps.current-time.outputs.millisecond }}"
+    ############################################################################################################################
+    # Echo Build Artifact Filename
+    ############################################################################################################################
+    - name: Echo Build Artifact Filename
+      run: echo ${{ env.BUILD_ARTIFACT_FILENAME }}
+    # TODO: add step to build & upload "latest" installer to itpipesinstallers s3 bucket and refactor existing code to upload versioned
+    # installers to the "versions" sub folder in the s3 itpipesinstallers s3 bucket and refactor code to add "latest" links
+    # to the build summary and slack channel.  can we pass 2 output file names to the aip step or do we have to call it twice?
+    ############################################################################################################################
+    # Build Advanced Installer Package
+    # https://github.com/marketplace/actions/advanced-installer-tool
+    # https://github.com/Caphyon/advinst-github-action
+    ############################################################################################################################
+    - name: Build Advanced Installer Package
+      id: build-advanced-installer-package
+      # uses: caphyon/advinst-github-action@v1.0 # target v1.0
+      uses: caphyon/advinst-github-action@main # target main
+      with:
+        advinst-version: ${{ env.ADVINST_VERSION }}
+        advinst-license: ${{ secrets.ADVINST_LICENSE_KEY }}
+        advinst-enable-automation: false
+        aip-path: ${{ env.APP_DIR}}\${{ env.ADVINST_PROJECT_FILE }}
+        aip-build-name: DefaultBuild
+        aip-package-name: ${{ env.BUILD_ARTIFACT_FILENAME }} # NOTE: uncomment to override project defined package name
+        aip-output-dir: ${{ env.WORKSPACE }}\ITpipesConnect\Setup_Files
+        # aip-commands: |
+        #    SetProperty PlatformTarget="${{ env.PlatformTarget }}"
+        #    SetProperty ProductVersion="1.2.3.4" # override version number
+        #    SetVersion 1.2.3.4 # what version does this set?  aip? product? app?
+        aip-commands: |
+           SetProperty PlatformTarget="${{ env.PlatformTarget }}"
+           SetProperty BranchName="${{ env.BRANCH_NAME }}"
+           SetProperty UpdateType="${{ env.UpdateType }}"
+      env:
+        PlatformTarget: ${{ matrix.platform-target }}
+        UpdateType: ${{ matrix.update-type }}
+        # TODO: move ADVINST env vars to GitHub Environment vars so we can control it outside of aip file
+        ADVINST_VERSION: '21.4'
+        ADVINST_PROJECT_FILE: 'ITpipesConnect.aip'
+    ############################################################################################################################
+    # Echo installer file length, hash, and MD5 to GitHub
+    ############################################################################################################################
+    - name: Get Installer Meta Data
+      id: get-installer-meta-data
+      shell: powershell
+      run: |
+          #$file_version=[System.Diagnostics.FileVersionInfo]::GetVersionInfo("${{ env.BUILD_ARTIFACT_FILENAME }}").FileVersion
+          cd ITpipesConnect\Setup_Files
+          $file_length=Get-Item "${{ env.BUILD_ARTIFACT_FILENAME }}" | Select-Object -ExpandProperty Length
+          echo "INSTALLER_FILE_LENGTH=$file_length" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          $file_hash=Get-FileHash "${{ env.BUILD_ARTIFACT_FILENAME }}" | Select-Object -ExpandProperty Hash
+          echo "INSTALLER_FILE_HASH=$file_hash" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          $file_md5=Get-FileHash "${{ env.BUILD_ARTIFACT_FILENAME }}" -algorithm MD5 | Select-Object -ExpandProperty Hash
+          echo "INSTALLER_FILE_MD5=$file_md5" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+    ############################################################################################################################
+    # Echo Installer Meta Data
+    ############################################################################################################################
+    - name: Echo Installer Meta Data
+      run: |
+        echo "Installer file length: ${{ env.INSTALLER_FILE_LENGTH }}"
+        echo "Installer file hash: ${{ env.INSTALLER_FILE_HASH }}"
+        echo "Installer file md5: ${{ env.INSTALLER_FILE_MD5 }}"
+    ############################################################################################################################
+    # Upload Build Artifact to AWS S3 Bucket
+    ############################################################################################################################
+    - name: Upload Build Artifact to AWS S3 Bucket
+      id: S3_UPLOAD # TODO: rename to upload-build-artifact-to-s3 and update references accordingly
+      shell: bash
+      run: AWS_ACCESS_KEY_ID=${{secrets.AWS_ACCESS_KEY_ID}} AWS_SECRET_ACCESS_KEY=${{secrets.AWS_SECRET_ACCESS_KEY}} AWS_REGION=${{vars.AWS_REGION}} aws s3 cp ${{ env.BUILD_ARTIFACT_FILENAME }} s3://${{vars.AWS_BUCKET}}/${{ env.BUILD_ARTIFACT_FILENAME }}
+      working-directory: ${{ env.WORKSPACE }}/ITpipesConnect/Setup_Files
 
-  job2:
+    ############################################################################################################################
+    # Add Build Artifact S3 URL to GitHub ENV
+    ############################################################################################################################
+    - name: Add Build Artifact S3 URL to GitHub ENV
+      id: add-build-artifact-s3-url-to-env
+      shell: bash
+      run: echo "BUILD_ARTIFACT_S3_URL=https://${{vars.AWS_BUCKET}}.s3.amazonaws.com/${{ env.BUILD_ARTIFACT_FILENAME }}" >> $GITHUB_ENV
+    ############################################################################################################################
+    # Write Build Artifact S3 URL to Workflow Job Summary
+    ############################################################################################################################
+    - name: Write Build Artifact S3 URL to Workflow Job Summary
+      run: |
+        echo "Build Artifact S3 URL: ${{ env.BUILD_ARTIFACT_S3_URL}}" >> $GITHUB_STEP_SUMMARY
+        cat $GITHUB_STEP_SUMMARY
+      shell: bash
+    ############################################################################################################################
+    # Post Build Artifact S3 URL to Slack Channel
+    ############################################################################################################################
+    - name: Post Build Artifact S3 URL to Slack Channel
+      id: post-build-artifact-s3-url-to-slack-channel
+      uses: slackapi/slack-github-action@v1.25.0
+      with:
+        # Slack channel id, channel name, or user id to post message.
+        # See also: https://api.slack.com/methods/chat.postMessage#channels
+        # NOTE: You can pass in multiple channels to post to by providing a comma-delimited list of channel IDs.
+        channel-id: 'ci-cd' # TODO: move to env var
+        # For posting a simple plain text message
+        # slack-message: "GitHub build result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+        # TODO: wire up enhanced slack message formatting to post in ci/cd channel - app name, version number, date, etc.
+        slack-message: "ITpipesConnect Installer v${{ env.APP_VERSION_NUMBER }} (${{ env.PlatformTarget }} - ${{ env.BRANCH_NAME }} - ${{ env.UpdateType }}) Download URL: ${{ env.BUILD_ARTIFACT_S3_URL}}"
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        PlatformTarget: ${{ matrix.platform-target }}
+        UpdateType: ${{ matrix.update-type }}
+
+
+  mobile-job:
+    name: Build ITPipes Mobile
+    environment: ITPipesMobile
     needs: check-changes
-    if: needs.check-changes.outputs.path2 == 'true'
-    runs-on: ubuntu-latest
+    if: needs.check-changes.outputs.mobile == 'true'
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: [Release] # Configuration Values: Debug, Release
+        platform-target: [x86, x64] # Platform Target Values: x86, x64
+        update-type: [AUTOUPDATE, NOUPDATE] # Update Type Values: AUTOUPDATE, NOUPDATE
+    env:
+      SOLUTION_NAME: ITpipesMobile.sln
+      # TEST_PROJECT_PATH: ITpipesMobileTests.csproj              # Replace with the path to the ITpipesMobile test project once available.
+      APP_DIR: ITpipesMobile
+      APP_NAME: ITpipesMobile.exe
     steps:
-    - name: Job 2
-      run: echo "Job 2 is running because path2 was modified."
+    ############################################################################################################################
+    # Add Repo Name to GitHub ENV
+    ############################################################################################################################
+    - name: Add Repo Name to GitHub ENV
+      id: add-repo-name-to-env
+      shell: bash
+      run: echo "REPO_NAME=${{ github.repository }}" >> $GITHUB_ENV
+    ############################################################################################################################
+    # Echo Repo Name
+    ############################################################################################################################
+    - name: Echo Repo Name
+      run : echo ${{ env.REPO_NAME }}
+    ############################################################################################################################
+    # Add Branch Name to GitHub ENV
+    ############################################################################################################################
+    - name: Add Branch Name to GitHub ENV
+      id: add-branch-name-to-env
+      shell: bash
+      run: |
+          echo "BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_ENV # extract branch name and add to env
+    ############################################################################################################################
+    # Echo Branch Name
+    ############################################################################################################################
+    - name: Echo Branch Name
+      run : echo ${{ env.BRANCH_NAME }}
+    ############################################################################################################################
+    # Add Workspace to GitHub ENV
+    ############################################################################################################################
+    - name: Add Workspace to GitHub ENV
+      id: add-workspace-to-env
+      shell: bash
+      run: echo "WORKSPACE=${{ github.workspace }}" >> $GITHUB_ENV
+    ############################################################################################################################
+    # Echo Workspace
+    ############################################################################################################################
+    - name: Echo Workspace
+      run: echo ${{ env.WORKSPACE }}
+    ############################################################################################################################
+    # Checkout Code
+    ############################################################################################################################
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    ############################################################################################################################
+    # Install .NET Framework
+    ############################################################################################################################
+    - name: Install .NET Framework
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 6.0.x # target v6.0.x
+    ############################################################################################################################
+    # Setup MSBuild
+    # https://github.com/microsoft/setup-msbuild
+    ############################################################################################################################
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@2
+    ############################################################################################################################
+    # Get Current Time
+    # TODO: figure out why day value isn't padded with 0 in timestamp below - do we need to update format?
+    ############################################################################################################################
+    - name: Get Current Time
+      uses: josStorer/get-current-time@v2
+      id: current-time # TODO: rename to get-current-time and update references accordingly
+      with:
+        # format: YYYYMMDD-HHmmss
+        format: YYYYMMDD-HH
+        utcOffset: "+00:00" # should we offset UTC to MST?
+    ############################################################################################################################
+    # Restore NuGet Packages
+    ############################################################################################################################
+    - name: Restore NuGet Packages
+      id: restore-nuget-packages
+      run: msbuild $env:SOLUTION_NAME /t:Restore /p:Configuration=$env:Configuration
+      env:
+        Configuration: ${{ matrix.configuration }}
+    ############################################################################################################################
+    # Build Application
+    # C# Compiler Options
+    # https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/code-generation
+    ############################################################################################################################
+    - name: Build Application
+      id: build-app
+      # run: msbuild $env:SOLUTION_NAME /t:Build /p:Configuration=$env:Configuration /p:PlatformTarget=$env:PlatformTarget /p:DebugSymbols=$env:DebugSymbols /p:DebugType=$env:DebugType
+      run: msbuild $env:SOLUTION_NAME /t:Build /p:Configuration=$env:Configuration /p:PlatformTarget=$env:PlatformTarget
+      env:
+        Configuration: ${{ matrix.configuration }}
+        PlatformTarget: ${{ matrix.platform-target }}
+        # DebugSymbols: false                                       # true, false
+        # DebugType: none                                           # none, full, pdbonly, portable, embedded
+    ############################################################################################################################
+    # Execute Unit Tests
+    # TODO: move to test-itpipes-mobile.yml CI workflow to be triggered on push to any branch and pr to dev/master etc.
+    ############################################################################################################################
+    # - name: Execute Unit Tests
+    #   run: dotnet test
+    ############################################################################################################################
+    # Add Relative App Path to GitHub ENV
+    ############################################################################################################################
+    - name: Add Relative App Path to GitHub ENV
+      id: add-relative-app-path-to-env
+      shell: bash
+      run: echo "RELATIVE_APP_PATH=${{ env.APP_DIR }}\bin\${{ env.Configuration }}\${{ env.APP_NAME }}" >> $GITHUB_ENV
+      env:
+        Configuration: ${{ matrix.configuration }}
+    ############################################################################################################################
+    # Echo Relative App Path
+    ############################################################################################################################
+    - name: Echo Relative App Path
+      run : echo ${{ env.RELATIVE_APP_PATH }}
+    ############################################################################################################################
+    # Add App Version Number to GitHub ENV
+    ############################################################################################################################
+    - name: Add App Version Number to GitHub ENV
+      id: add-app-version-number-to-env
+      shell: powershell
+      run: |
+          # $file_version=[System.Diagnostics.FileVersionInfo]::GetVersionInfo("${{ env.RELATIVE_APP_PATH }}").FileVersion.replace('.', '_') # replace periods with underscores in file version
+          $file_version=[System.Diagnostics.FileVersionInfo]::GetVersionInfo("${{ env.RELATIVE_APP_PATH }}").FileVersion
+          echo "APP_VERSION_NUMBER=$file_version" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+      env:
+        Configuration: ${{ matrix.configuration }}
+    ############################################################################################################################
+    # Echo App Version Number
+    ############################################################################################################################
+    - name: Echo App Version Number
+      run: echo ${{ env.APP_VERSION_NUMBER }}
+    ############################################################################################################################
+    # Add Build Artifact Filename to GitHub ENV
+    ############################################################################################################################
+    - name: Add Build Artifact Filename to GitHub ENV
+      id: add-build-artifact-filename-to-env
+      shell: bash
+      # TODO: move "ITpipesMobileInstaller" prefix to INSTALLER_PREFIX env var and update references accordingly
+      # run: echo "BUILD_ARTIFACT_FILENAME=ITpipesMobileSetup_${{ env.Configuration }}_${{ env.PlatformTarget }}_${{ env.YEAR }}${{ env.MONTH }}${{ env.DAY }}-${{ env.HOUR }}${{ env.MINUTE }}${{ env.SECOND }}.exe" >> $GITHUB_ENV
+      # run: echo "BUILD_ARTIFACT_FILENAME=ITpipesMobileSetup_${{ env.PlatformTarget }}_${{ env.BRANCH_NAME }}_${{ env.UpdateType }}_${{ env.APP_VERSION_NUMBER }}.exe" >> $GITHUB_ENV
+      # run: echo "BUILD_ARTIFACT_FILENAME=ITpipesMobileInstaller_${{ env.PlatformTarget }}_${{ env.BRANCH_NAME }}_${{ env.UpdateType }}_${{ env.APP_VERSION_NUMBER }}.exe" >> $GITHUB_ENV
+      run: echo "BUILD_ARTIFACT_FILENAME=ITpipesMobileInstaller_v${{ env.APP_VERSION_NUMBER }}_${{ env.PlatformTarget }}_${{ env.BRANCH_NAME }}_${{ env.UpdateType }}.exe" >> $GITHUB_ENV
+      env:
+        # Configuration: ${{ matrix.configuration }}
+        PlatformTarget: ${{ matrix.platform-target }}
+        UpdateType: ${{ matrix.update-type }}
+        # TIMESTAMP: ${{ env.TIMESTAMP }}
+        # TIME: "${{ steps.current-time.outputs.time }}"
+        # R_TIME: "${{ steps.current-time.outputs.readableTime }}"
+        # F_TIME: "${{ steps.current-time.outputs.formattedTime }}"
+        # YEAR: "${{ steps.current-time.outputs.year }}"
+        # MONTH: "${{ steps.current-time.outputs.month }}"
+        # DAY: "${{ steps.current-time.outputs.day }}"
+        # HOUR: "${{ steps.current-time.outputs.hour }}"
+        # MINUTE: "${{ steps.current-time.outputs.minute }}"
+        # SECOND: "${{ steps.current-time.outputs.second }}"
+        # MILLISECOND: "${{ steps.current-time.outputs.millisecond }}"
+    ############################################################################################################################
+    # Echo Build Artifact Filename
+    ############################################################################################################################
+    - name: Echo Build Artifact Filename
+      run: echo ${{ env.BUILD_ARTIFACT_FILENAME }}
+    # TODO: add step to build & upload "latest" installer to itpipesinstallers s3 bucket and refactor existing code to upload versioned
+    # installers to the "versions" sub folder in the s3 itpipesinstallers s3 bucket and refactor code to add "latest" links
+    # to the build summary and slack channel.  can we pass 2 output file names to the aip step or do we have to call it twice?
+    ############################################################################################################################
+    # Build Advanced Installer Package
+    # https://github.com/marketplace/actions/advanced-installer-tool
+    # https://github.com/Caphyon/advinst-github-action
+    ############################################################################################################################
+    - name: Build Advanced Installer Package
+      id: build-advanced-installer-package
+      # uses: caphyon/advinst-github-action@v1.0 # target v1.0
+      uses: caphyon/advinst-github-action@main # target main
+      with:
+        advinst-version: ${{ env.ADVINST_VERSION }}
+        advinst-license: ${{ secrets.ADVINST_LICENSE_KEY }}
+        advinst-enable-automation: false
+        aip-path: ${{ env.APP_DIR}}\${{ env.ADVINST_PROJECT_FILE }}
+        aip-build-name: DefaultBuild
+        aip-package-name: ${{ env.BUILD_ARTIFACT_FILENAME }} # NOTE: uncomment to override project defined package name
+        aip-output-dir: ${{ env.WORKSPACE }}\ITpipesMobile\Setup_Files
+        # aip-commands: |
+        #    SetProperty PlatformTarget="${{ env.PlatformTarget }}"
+        #    SetProperty ProductVersion="1.2.3.4" # override version number
+        #    SetVersion 1.2.3.4 # what version does this set?  aip? product? app?
+        aip-commands: |
+           SetProperty PlatformTarget="${{ env.PlatformTarget }}"
+           SetProperty BranchName="${{ env.BRANCH_NAME }}"
+           SetProperty UpdateType="${{ env.UpdateType }}"
+      env:
+        PlatformTarget: ${{ matrix.platform-target }}
+        UpdateType: ${{ matrix.update-type }}
+        # TODO: move ADVINST env vars to GitHub Environment vars so we can control it outside of aip file
+        ADVINST_VERSION: '21.4'
+        ADVINST_PROJECT_FILE: 'ITpipes Mobile Professional ${{ matrix.platform-target }}.aip'
+    ############################################################################################################################
+    # Echo installer file length, hash, and MD5 to GitHub
+    ############################################################################################################################
+    - name: Get Installer Meta Data
+      id: get-installer-meta-data
+      shell: powershell
+      run: |
+          #$file_version=[System.Diagnostics.FileVersionInfo]::GetVersionInfo("${{ env.BUILD_ARTIFACT_FILENAME }}").FileVersion
+          cd ITpipesMobile\Setup_Files
+          $file_length=Get-Item "${{ env.BUILD_ARTIFACT_FILENAME }}" | Select-Object -ExpandProperty Length
+          echo "INSTALLER_FILE_LENGTH=$file_length" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          $file_hash=Get-FileHash "${{ env.BUILD_ARTIFACT_FILENAME }}" | Select-Object -ExpandProperty Hash
+          echo "INSTALLER_FILE_HASH=$file_hash" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          $file_md5=Get-FileHash "${{ env.BUILD_ARTIFACT_FILENAME }}" -algorithm MD5 | Select-Object -ExpandProperty Hash
+          echo "INSTALLER_FILE_MD5=$file_md5" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+    ############################################################################################################################
+    # Echo Installer Meta Data
+    ############################################################################################################################
+    - name: Echo Installer Meta Data
+      run: |
+        echo "Installer file length: ${{ env.INSTALLER_FILE_LENGTH }}"
+        echo "Installer file hash: ${{ env.INSTALLER_FILE_HASH }}"
+        echo "Installer file md5: ${{ env.INSTALLER_FILE_MD5 }}"
+    ############################################################################################################################
+    # Upload Build Artifact to AWS S3 Bucket
+    ############################################################################################################################
+    - name: Upload Build Artifact to AWS S3 Bucket
+      id: S3_UPLOAD # TODO: rename to upload-build-artifact-to-s3 and update references accordingly
+      shell: bash
+      run: AWS_ACCESS_KEY_ID=${{secrets.AWS_ACCESS_KEY_ID}} AWS_SECRET_ACCESS_KEY=${{secrets.AWS_SECRET_ACCESS_KEY}} AWS_REGION=${{vars.AWS_REGION}} aws s3 cp ${{ env.BUILD_ARTIFACT_FILENAME }} s3://${{vars.AWS_BUCKET}}/${{ env.BUILD_ARTIFACT_FILENAME }}
+      working-directory: ${{ env.WORKSPACE }}/ITpipesMobile/Setup_Files
+    ############################################################################################################################
+    # Add Build Artifact S3 URL to GitHub ENV
+    ############################################################################################################################
+    - name: Add Build Artifact S3 URL to GitHub ENV
+      id: add-build-artifact-s3-url-to-env
+      shell: bash
+      run: echo "BUILD_ARTIFACT_S3_URL=https://${{vars.AWS_BUCKET}}.s3.amazonaws.com/${{ env.BUILD_ARTIFACT_FILENAME }}" >> $GITHUB_ENV
+    ############################################################################################################################
+    # Write Build Artifact S3 URL to Workflow Job Summary
+    ############################################################################################################################
+    - name: Write Build Artifact S3 URL to Workflow Job Summary
+      run: |
+        echo "Build Artifact S3 URL: ${{ env.BUILD_ARTIFACT_S3_URL}}" >> $GITHUB_STEP_SUMMARY
+        cat $GITHUB_STEP_SUMMARY
+      shell: bash
+    ############################################################################################################################
+    # Post Build Artifact S3 URL to Slack Channel
+    ############################################################################################################################
+    - name: Post Build Artifact S3 URL to Slack Channel
+      id: post-build-artifact-s3-url-to-slack-channel
+      uses: slackapi/slack-github-action@v1.25.0
+      with:
+        # Slack channel id, channel name, or user id to post message.
+        # See also: https://api.slack.com/methods/chat.postMessage#channels
+        # NOTE: You can pass in multiple channels to post to by providing a comma-delimited list of channel IDs.
+        channel-id: 'ci-cd' # TODO: move to env var
+        # For posting a simple plain text message
+        # slack-message: "GitHub build result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+        # TODO: wire up enhanced slack message formatting to post in ci/cd channel - app name, version number, date, etc.
+        slack-message: "ITpipesMobile Installer v${{ env.APP_VERSION_NUMBER }} (${{ env.PlatformTarget }} - ${{ env.BRANCH_NAME }} - ${{ env.UpdateType }}) Download URL: ${{ env.BUILD_ARTIFACT_S3_URL}}"
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        PlatformTarget: ${{ matrix.platform-target }}
+        UpdateType: ${{ matrix.update-type }}
