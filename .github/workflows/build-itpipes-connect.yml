@@ -9,18 +9,38 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Build
-      run: echo "Building the project..."
+      run: echo "Running Test..."
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: 'deployEnv'
-      url: ${{ steps.deploy.outputs.url }}
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+    - name: Save Version
+      run: echo "APP_VERSION_NUMBER=1.0.5" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
-    - name: Deploy
-      id: deploy
-      run: echo "Deploying the project..."
+    - name: Create .ini file
+      run: |
+        $content = @"
+        ;aiu;something x64 Advanced Installer Updater INI File - STAGING - AUTOUPDATE;
+        [${{ env.APP_VERSION_NUMBER }}]
+        Name = something ${{ env.APP_VERSION_NUMBER }}
+        ProductVersion = ${{ env.APP_VERSION_NUMBER }}
+        URL =
+        https://something.s3.amazonaws.com/ExampleSomething_v${{ env.APP_VERSION_NUMBER }}_x64_mast
+        er_AUTOUPDATE.exe
+        Size = 529013385
+        SHA256 = 86225B8C30D862C71697BC7B9C514BC6560D9C6D3D62204F9CEB88AA3365DBCD
+        MD5 = ACFEC0557380A99CA1C2490F74FB073A
+        ServerFileName = something${{ env.APP_VERSION_NUMBER }}_x64_master_AUTOUPDATE.exe
+        Flags = NoRedetect
+        RegistryKey = HKLM\SOFTWARE\something Opco, LLC\something\Version
+        Version = ${{ env.APP_VERSION_NUMBER }}
+        UpdatedApplications = something(1.0-${{ env.APP_VERSION_NUMBER }})
+        AutoCloseApplication = [APPDIR]something.exe|;something;AlwaysRestart
+        Feature = Something patch notes:
+        https://support.something.com/portal/en/kb/articles/something-release-notes
+        "@
+        $content | Out-File -FilePath .\version.ini
+      shell: pwsh
+
+    - name: Upload .ini file as artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: version-ini
+        path: ./version.ini
