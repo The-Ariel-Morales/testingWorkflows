@@ -14,33 +14,38 @@ jobs:
     - name: Save Version
       run: echo "APP_VERSION_NUMBER=1.0.5" >> $GITHUB_ENV
 
-    - name: Create .ini file
+    ############################################################################################################################
+    # Set .ini file name
+    ############################################################################################################################
+    - name: Set file name for .ini
       run: |
-        $content = @"
-        ;aiu;something x64 Advanced Installer Updater INI File - STAGING - AUTOUPDATE;
-        [${{ env.APP_VERSION_NUMBER }}]
-        Name = something ${{ env.APP_VERSION_NUMBER }}
-        ProductVersion = ${{ env.APP_VERSION_NUMBER }}
-        URL =
-        https://something.s3.amazonaws.com/ExampleSomething_v${{ env.APP_VERSION_NUMBER }}_x64_mast
-        er_AUTOUPDATE.exe
-        Size = 529013385
-        SHA256 = 86225B8C30D862C71697BC7B9C514BC6560D9C6D3D62204F9CEB88AA3365DBCD
-        MD5 = ACFEC0557380A99CA1C2490F74FB073A
-        ServerFileName = something${{ env.APP_VERSION_NUMBER }}_x64_master_AUTOUPDATE.exe
-        Flags = NoRedetect
-        RegistryKey = HKLM\SOFTWARE\something Opco, LLC\something\Version
-        Version = ${{ env.APP_VERSION_NUMBER }}
-        UpdatedApplications = something(1.0-${{ env.APP_VERSION_NUMBER }})
-        AutoCloseApplication = [APPDIR]something.exe|;something;AlwaysRestart
-        Feature = Something patch notes:
-        https://support.something.com/portal/en/kb/articles/something-release-notes
-        "@
-        $content | Out-File -FilePath .\version.ini
-      shell: pwsh
+        echo "UPDATER_NAME=ITpipesMobileUpdater_x64_staging_AUTOUPDATE.ini" >> $GITHUB_ENV
+    ############################################################################################################################
+    # Create .ini file using environment variables
+    ############################################################################################################################
+    - name: Create INI file
+      run: |
+        echo ";aiu;ITpipesConnect Advanced Installer Updater INI File;" >> ${{ env.UPDATER_NAME }}
+        echo "" >> ${{ env.UPDATER_NAME }}
+        echo "" >> ${{ env.UPDATER_NAME }}
+        echo "[something]" >> ${{ env.UPDATER_NAME }}
+        echo "Name = ITpipes Connect something" >> ${{ env.UPDATER_NAME }}
+        echo "ProductVersion = something" >> ${{ env.UPDATER_NAME }}
+        echo "URL = Something" >> ${{ env.UPDATER_NAME }}
+        echo "Size = something" >> ${{ env.UPDATER_NAME }}
+        echo "SHA256 = something" >> ${{ env.UPDATER_NAME }}
+        echo "MD5 = something" >> ${{ env.UPDATER_NAME }}
+        echo "ServerFileName = something" >> ${{ env.UPDATER_NAME }}
+        echo "RegistryKey = HKLM\SOFTWARE\ITpipes Opco, LLC\ITpipes Connect\Version" >> ${{ env.UPDATER_NAME }}
+        echo "Flags = NoRedetect" >> ${{ env.UPDATER_NAME }}
+        echo "Version = something" >> ${{ env.UPDATER_NAME }}
+        echo "UpdatedApplications = ITpipes Connect(1.0-something)" >> ${{ env.UPDATER_NAME }}
+        echo "AutoCloseApplication = [APPDIR]ITpipeConnect.exe|;ITpipes Connect;AlwaysRestart" >> ${{ env.UPDATER_NAME }}
+        echo "Feature = ITpipes Connect patch notes: https://support.itpipes.com/portal/en/kb/articles/itpipes-release-notes" >> ${{ env.UPDATER_NAME }}
+    ############################################################################################################################
 
     - name: Upload .ini file as artifact
       uses: actions/upload-artifact@v2
       with:
         name: version-ini
-        path: ./version.ini
+        path: ./${{ env.UPDATER_NAME }}
