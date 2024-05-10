@@ -7,50 +7,31 @@ on:
       - 'connect/AssemblyInfo.txt'
 
 jobs:
-  build:
+  ############################################################################################################################
+  # Check for path changes and apply path-filtering
+  ############################################################################################################################
+  check-changes:
     runs-on: ubuntu-latest
+    outputs:
+      asp: ${{ steps.filter.outputs.asp }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Build
-      run: echo "Running Test..."
-
-    - name: Save Version
-      run: echo "APP_VERSION_NUMBER=1.0.5" >> $GITHUB_ENV
-
-    ############################################################################################################################
-    # Set .ini file name
-    ############################################################################################################################
-    - name: Set file name for .ini
-      run: |
-        echo "UPDATER_NAME=ITpipesMobileUpdater_x64_staging_AUTOUPDATE.ini" >> $GITHUB_ENV
-    ############################################################################################################################
-    # Create .ini file using environment variables
-    ############################################################################################################################
-    - name: Create INI file
-      run: |
-        echo ";aiu;ITpipesConnect Advanced Installer Updater INI File;" >> ${{ env.UPDATER_NAME }}
-        echo "" >> ${{ env.UPDATER_NAME }}
-        echo "" >> ${{ env.UPDATER_NAME }}
-        echo "[something]" >> ${{ env.UPDATER_NAME }}
-        echo "Name = ITpipes Connect something" >> ${{ env.UPDATER_NAME }}
-        echo "ProductVersion = something" >> ${{ env.UPDATER_NAME }}
-        echo "URL = Something" >> ${{ env.UPDATER_NAME }}
-        echo "Size = something" >> ${{ env.UPDATER_NAME }}
-        echo "SHA256 = something" >> ${{ env.UPDATER_NAME }}
-        echo "MD5 = something" >> ${{ env.UPDATER_NAME }}
-        echo "ServerFileName = something" >> ${{ env.UPDATER_NAME }}
-        echo "RegistryKey = HKLM\SOFTWARE\ITpipes Opco, LLC\ITpipes Connect\Version" >> ${{ env.UPDATER_NAME }}
-        echo "Flags = NoRedetect" >> ${{ env.UPDATER_NAME }}
-        echo "Version = something" >> ${{ env.UPDATER_NAME }}
-        echo "UpdatedApplications = ITpipes Connect(1.0-something)" >> ${{ env.UPDATER_NAME }}
-        echo "AutoCloseApplication = [APPDIR]ITpipeConnect.exe|;ITpipes Connect;AlwaysRestart" >> ${{ env.UPDATER_NAME }}
-        echo "Feature = ITpipes Connect patch notes: https://support.itpipes.com/portal/en/kb/articles/itpipes-release-notes" >> ${{ env.UPDATER_NAME }}
-    ############################################################################################################################
-
-    - name: Upload .ini file as artifact
-      uses: actions/upload-artifact@v2
+    - name: Checkout repo
+      uses: actions/checkout@v4
+    - name: Path filtering
+      id: filter
+      uses: dorny/paths-filter@v3
       with:
-        name: version-ini
-        path: ./${{ env.UPDATER_NAME }}
+        filters: |
+          asp:
+            - 'connect/AssemblyInfo.txt'
+
+  ############################################################################################################################
+  # Build and Deploy ITpipesASP
+  ############################################################################################################################
+  run:
+    runs-on: windows-latest
+    needs: check-changes
+    if: needs.check-changes.outputs.asp == 'true'
+    steps:
+    - name: Build ITpipesASP
+      run: echo "SUCCESS"
