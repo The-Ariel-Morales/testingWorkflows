@@ -1,5 +1,10 @@
 name: Build and Deploy
-on: [push]
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'connect\AssemblyInfo.txt'
 
 jobs:
   build:
