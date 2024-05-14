@@ -13,8 +13,8 @@ jobs:
   check-changes:
     runs-on: ubuntu-latest
     outputs:
-      connect: ${{ steps.filter.outputs.asp }}
-      mobile: ${{ steps.filter.outputs.asp }}
+      connect: ${{ steps.filter.outputs.connect }}
+      mobile: ${{ steps.filter.outputs.mobile }}
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
   run:
     runs-on: windows-latest
     needs: check-changes
-    if: needs.check-changes.outputs.asp == 'true'
+    if: needs.check-changes.outputs.connect == 'true'
     steps:
     - name: Build ITpipesASP
       run: echo "SUCCESS"
