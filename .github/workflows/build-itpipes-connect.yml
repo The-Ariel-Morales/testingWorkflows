@@ -3,8 +3,8 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'connect/AssemblyInfo.cs'
+    # paths:
+    #   - 'connect/AssemblyInfo.cs'
 
 jobs:
   ############################################################################################################################
