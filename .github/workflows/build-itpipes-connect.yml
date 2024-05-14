@@ -25,9 +25,9 @@ jobs:
         base: ${{ github.ref }}
         filters: |
           connect:
-            - 'connect/AssemblyInfo.txt'
+            - 'connect/AssemblyInfo.cs'
           mobile:
-            - 'mobile/AssemblyInfo.txt'
+            - 'mobile/AssemblyInfo.cs'
 
   ############################################################################################################################
   # Build and Deploy ITpipesASP
