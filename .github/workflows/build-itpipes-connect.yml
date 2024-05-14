@@ -13,7 +13,8 @@ jobs:
   check-changes:
     runs-on: ubuntu-latest
     outputs:
-      asp: ${{ steps.filter.outputs.asp }}
+      connect: ${{ steps.filter.outputs.asp }}
+      mobile: ${{ steps.filter.outputs.asp }}
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
@@ -22,8 +23,10 @@ jobs:
       uses: dorny/paths-filter@v3
       with:
         filters: |
-          asp:
+          connect:
             - 'connect/AssemblyInfo.txt'
+            mobile:
+            - 'mobile/AssemblyInfo.txt'
 
   ############################################################################################################################
   # Build and Deploy ITpipesASP
