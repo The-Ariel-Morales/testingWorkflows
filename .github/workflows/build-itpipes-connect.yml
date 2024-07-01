@@ -8,14 +8,12 @@ on:
 
 jobs:
   ############################################################################################################################
-  # Check for path changes and apply path-filtering
+  # Check the branch name
   ############################################################################################################################
   test_branches:
     runs-on: ubuntu-latest
-    outputs:
-      connect: ${{ steps.filter.outputs.connect }}
-      mobile: ${{ steps.filter.outputs.mobile }}
     steps:
-    - name: Write Branch Name with PowerShell
-      shell: pwsh
-      run: Write-Host "Branch Name: $env:GITHUB_REF_NAME"
+      - name: Write Branch Name with PowerShell
+        shell: pwsh
+        run: |
+          Write-Host "Branch Name: $env:GITHUB_REF_NAME"
