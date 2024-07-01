@@ -16,8 +16,6 @@ jobs:
       connect: ${{ steps.filter.outputs.connect }}
       mobile: ${{ steps.filter.outputs.mobile }}
     steps:
-    - name: Rename Branch Name in case of '/' or '\' in branch name or if it's a release branch
+    - name: Write Branch Name with PowerShell
       shell: pwsh
-      run: |
-        $branch_name = $env:BRANCH_NAME
-        echo $branch_name
+      run: Write-Host "Branch Name: $env:GITHUB_REF_NAME"
