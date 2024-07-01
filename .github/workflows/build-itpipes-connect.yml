@@ -10,32 +10,14 @@ jobs:
   ############################################################################################################################
   # Check for path changes and apply path-filtering
   ############################################################################################################################
-  check-changes:
+  test_branches:
     runs-on: ubuntu-latest
     outputs:
       connect: ${{ steps.filter.outputs.connect }}
       mobile: ${{ steps.filter.outputs.mobile }}
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
-    - name: Path filtering
-      id: filter
-      uses: dorny/paths-filter@v3
-      with:
-        base: ${{ github.ref }}
-        filters: |
-          connect:
-            - 'connect/AssemblyInfo.cs'
-          mobile:
-            - 'mobile/AssemblyInfo.cs'
-
-  ############################################################################################################################
-  # Build and Deploy ITpipesASP
-  ############################################################################################################################
-  run:
-    runs-on: windows-latest
-    needs: check-changes
-    if: needs.check-changes.outputs.connect == 'true'
-    steps:
-    - name: Build ITpipesASP
-      run: echo "SUCCESS"
+    - name: Rename Branch Name in case of '/' or '\' in branch name or if it's a release branch
+      shell: pwsh
+      run: |
+        $branch_name = $env:BRANCH_NAME
+        echo $branch_name
